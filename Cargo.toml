@@ -2,6 +2,7 @@
 members = [
   "ethereum-proxy",
   "generic-proxy",
+  "plugins/eth-tx-signer",
   "plugins/permissioning",
   "plugins/simple-cache",
   "plugins/upstream",
