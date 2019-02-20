@@ -5,3 +5,10 @@ authors = ["Hernando Castano <castano.ha@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+cli-params = { path = "../../proxy/cli-params" }
+ethsign = "0.3.0"
+ethereum-types = "0.5.2"
+fnv = "1.0"
+rpc = { version = "10.1", package = "jsonrpc-core" }
+serde = { version = "1.0", features = ["derive"] }
+upstream = { path = "../upstream" }
