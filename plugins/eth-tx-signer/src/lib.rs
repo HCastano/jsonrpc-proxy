@@ -25,7 +25,7 @@ use rpc::{
 use serde::Deserialize;
 use upstream::helpers;
 
-mod config;
+pub mod config;
 
 // Maybe I should do something like this....
 // enum Transaction {
@@ -34,6 +34,7 @@ mod config;
 // }
 
 #[derive(Debug, Default, PartialEq, Deserialize)]
+#[serde(default)]
 // May need "condition" field here too
 struct TransactionParams {
     from: Address,
@@ -57,6 +58,7 @@ struct Transaction {
     nonce: Option<U256>,
 }
 
+// Transaction { from, maybeTo, data, value, gasPrice, gas, nonce }
 impl Transaction {
     fn new(params: &TransactionParams) -> Self {
         Self {
@@ -83,7 +85,7 @@ impl EthTxSigner {
 
     fn get_signed_request(&self, request: &rpc::Call) -> Result<Transaction, rpc::error::Error> {
         let params: TransactionParams = get_request_params(request)?;
-        // dbg!(params);
+        dbg!(&params);
 
         // TODO: Will want to handle the Err case by trying to request common fields
         // like nonce and gas price from the node. Ignoring for now.
@@ -122,7 +124,6 @@ impl Middleware {
     }
 }
 
-
 impl<M: rpc::Metadata> rpc::Middleware<M> for Middleware {
     type Future = rpc::middleware::NoopFuture;
     type CallFuture = rpc::futures::future::FutureResult<Option<rpc::Output>, ()>;
@@ -131,6 +132,8 @@ impl<M: rpc::Metadata> rpc::Middleware<M> for Middleware {
         F: FnOnce(rpc::Call, M) -> X + Send,
         X: Future<Item = Option<rpc::Output>, Error = ()> + Send + 'static,
     {
+        dbg!(&request);
+
         if !is_send_tx_request(&request) {
             // TODO: Return error complaining about wrong call
             return Either::B(next(request, meta));
@@ -138,7 +141,6 @@ impl<M: rpc::Metadata> rpc::Middleware<M> for Middleware {
 
         let signed_request = self.signer.get_signed_request(&request);
         dbg!(signed_request);
-
 
         // TODO: Get a proper return type here
         Either::B(next(request, meta))
@@ -160,11 +162,14 @@ fn is_send_tx_request(request: &rpc::Call) -> bool {
 fn get_request_params(request: &rpc::Call) -> Result<TransactionParams, rpc::types::Error> {
     let params = match request {
         rpc::Call::MethodCall(rpc::MethodCall { ref params, .. }) => {
-            dbg!(params);
             params.clone()
         },
         _ => return Err(Error::invalid_request()),
     };
 
-    params.parse()?
+    dbg!(&params);
+    // Need to parse this into a tuple because Ethereum calls
+    // receive their parameters inside an array
+    let (tx_params, ): (TransactionParams, ) = params.parse()?;
+    Ok(tx_params)
 }
