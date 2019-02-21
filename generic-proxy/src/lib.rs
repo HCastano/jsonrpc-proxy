@@ -12,6 +12,7 @@ extern crate env_logger;
 extern crate jsonrpc_core as rpc;
 extern crate jsonrpc_pubsub;
 
+extern crate eth_tx_signer;
 extern crate permissioning;
 extern crate simple_cache;
 extern crate transports;
@@ -27,6 +28,7 @@ use clap::App;
 
 type Metadata = Option<Arc<::jsonrpc_pubsub::Session>>;
 type Middleware<T> = (
+    eth_tx_signer::Middleware,
     permissioning::Middleware,
     simple_cache::Middleware,
     upstream::Middleware<T>,
@@ -35,10 +37,12 @@ type Middleware<T> = (
 fn handler<T: upstream::Transport>(
     transport: T,
     cache_params: &[simple_cache::config::Param],
+    eth_signer_params: &[eth_tx_signer::config::Param],
     permissioning_params: &[permissioning::config::Param],
     upstream_params: &[upstream::config::Param],
 ) -> rpc::MetaIoHandler<Metadata, Middleware<T>> {
     rpc::MetaIoHandler::with_middleware((
+        eth_tx_signer::Middleware::new(eth_signer_params),
         permissioning::Middleware::new(permissioning_params),
         simple_cache::Middleware::new(cache_params),
         upstream::Middleware::new(transport, upstream_params),
@@ -74,18 +78,26 @@ pub fn run_app(
     let permissioning_params = permissioning::config::params();
     let app = cli::configure_app(app, &permissioning_params);
 
+    let eth_signer_params = eth_tx_signer::config::params();
+    let app = cli::configure_app(app, &eth_signer_params);
+
     // Parse matches
     let matches = app.get_matches_from(args);
     let ws_params = cli::parse_matches(&matches, &ws_params).unwrap();
     let http_params = cli::parse_matches(&matches, &http_params).unwrap();
     let tcp_params = cli::parse_matches(&matches, &tcp_params).unwrap();
     let ipc_params = cli::parse_matches(&matches, &ipc_params).unwrap();
+
     let mut upstream_params = cli::parse_matches(&matches, &upstream_params).unwrap();
     upstream::config::add_subscriptions(&mut upstream_params, upstream_subscriptions);
+
     let ws_upstream_params = cli::parse_matches(&matches, &ws_upstream_params).unwrap();
+
     let mut cache_params = cli::parse_matches(&matches, &cache_params).unwrap();
     simple_cache::config::add_methods(&mut cache_params, simple_cache_methods);
+
     let permissioning_params = cli::parse_matches(&matches, &permissioning_params).unwrap();
+    let eth_signer_params = cli::parse_matches(&matches, &eth_signer_params).unwrap();
 
     // Actually run the damn thing.
     let mut runtime = Runtime::new().unwrap();
@@ -94,7 +106,7 @@ pub fn run_app(
         ws_upstream_params,
     ).unwrap();
 
-    let h = || handler(transport.clone(), &cache_params, &permissioning_params, &upstream_params);
+    let h = || handler(transport.clone(), &cache_params, &eth_signer_params, &permissioning_params, &upstream_params);
     let _server1 = transports::ws::start(ws_params, h()).unwrap();
     let _server2 = transports::http::start(http_params, h()).unwrap();
     let _server3 = transports::tcp::start(tcp_params, h()).unwrap();
